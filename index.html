@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bessere Börsenstrategie</title>
+  <meta name="description" content="Konservative Trading-Analyse mit Schutz gegen Frontrunning und Stop-Hunting">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M6 22l7-7 5 4 8-10' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="seitenkopf">
+    <h1>Bessere Börsenstrategie</h1>
+    <p>Konservative Trading-Analyse: CRV ab 1 : 2, 1–2 % Risiko, Time-Stop, Sentiment-Filter und Schutz gegen Frontrunning und Stop-Hunting.</p>
+  </header>
+
+  <main>
+    <section class="steuerung" aria-label="Analyse starten">
+      <form id="suche">
+        <label for="symbol" class="unsichtbar">Symbol</label>
+        <input id="symbol" name="symbol" placeholder="ISRG, SAP.DE, BTC/USD" autocomplete="off" autocapitalize="characters" spellcheck="false" required>
+        <button type="submit">Analysieren</button>
+        <label for="demo" class="unsichtbar">Demo</label>
+        <select id="demo" class="demo">
+          <option value="">Demo ohne API-Key …</option>
+          <option value="trv-setup">TRV am 04.08.2026 – Setup (historisch)</option>
+          <option value="trv-heute">TRV am 21.10.2026 – überkauft</option>
+          <option value="isrg-heute">ISRG am 21.10.2026 – Zahlentag</option>
+        </select>
+      </form>
+      <div class="leiste">
+        <label>Aktualisieren
+          <select id="intervall">
+            <option value="0">aus</option>
+            <option value="1">jede Minute</option>
+            <option value="5">alle 5 Minuten</option>
+            <option value="15">alle 15 Minuten</option>
+          </select>
+        </label>
+        <span id="meldung" role="status" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <section id="ergebnis" hidden aria-live="polite">
+      <div class="ergebniskopf">
+        <div>
+          <h2 id="titel"></h2>
+          <p id="unterzeile" class="leise"></p>
+        </div>
+        <span id="status" class="status"></span>
+      </div>
+
+      <div class="kacheln" id="kacheln"></div>
+
+      <figure class="karte chartkarte">
+        <figcaption>
+          <span class="titel">Tageskerzen und Levels</span>
+          <span class="legende" id="legende">
+            <span><i class="key einstieg"></i>Einstieg</span>
+            <span><i class="key ziel"></i>Kursziel</span>
+            <span><i class="key stop"></i>Stop</span>
+            <span><i class="key band"></i>Zonen der Masse</span>
+            <span><i class="key rund"></i>runde Zahl</span>
+          </span>
+        </figcaption>
+        <div class="chartrahmen">
+          <div id="chart"></div>
+          <div id="tooltip" class="tooltip" hidden></div>
+        </div>
+        <details class="tabelle">
+          <summary>Kurstabelle (letzte 20 Tage)</summary>
+          <div class="scroll"><table id="kurstabelle"></table></div>
+        </details>
+      </figure>
+
+      <div id="abschnitte" class="abschnitte"></div>
+
+      <div class="aktionen">
+        <button type="button" id="kopieren" class="zweit">Analyse als Text kopieren</button>
+        <button type="button" id="prompt" class="zweit">Prompt für Claude kopieren</button>
+      </div>
+    </section>
+
+    <section class="karte" aria-labelledby="wl-titel">
+      <h2 id="wl-titel">Watchlist prüfen</h2>
+      <p class="leise">Ein Symbol pro Zeile oder durch Komma getrennt. Jede Abfrage kostet 1 Twelve-Data-Credit; der Scan hält das Minutenlimit aus den Einstellungen ein.</p>
+      <textarea id="wl" rows="3" spellcheck="false" autocapitalize="characters" placeholder="ISRG, UNP, TRV, MMM, SAP.DE"></textarea>
+      <div class="aktionen">
+        <button type="button" id="wl-start">Alle prüfen</button>
+        <span id="wl-meldung" class="leise" role="status"></span>
+      </div>
+      <div class="scroll"><table id="wl-tabelle" hidden></table></div>
+    </section>
+
+    <details class="karte" id="einstellungen">
+      <summary>Einstellungen</summary>
+      <form id="formular" class="raster">
+        <label>Twelve-Data-API-Key<input type="password" name="tdKey" autocomplete="off" placeholder="aus dem Twelve-Data-Dashboard"></label>
+        <label>Alpha-Vantage-Key (News, optional)<input type="password" name="avKey" autocomplete="off"></label>
+        <label>Kapital<input type="number" name="kapital" min="100" step="100"></label>
+        <label>Kapitalwährung
+          <select name="kapitalWaehrung"><option>EUR</option><option>USD</option></select>
+        </label>
+        <label>Risiko pro Trade (%)<input type="number" name="risikoPct" min="0.1" max="2" step="0.1"></label>
+        <label>Einstieg
+          <select name="tranchen">
+            <option value="3">Staffel, 3 Tranchen (40/35/25 %)</option>
+            <option value="2">2 Tranchen (50/50 %)</option>
+            <option value="1">Einzel-Limit</option>
+          </select>
+        </label>
+        <label>Gebühr pro Order<input type="number" name="gebuehr" min="0" step="0.5"></label>
+        <label>Max. Positionsgröße (% vom Kapital)<input type="number" name="maxPositionPct" min="1" max="100" step="1"></label>
+        <label>Twelve-Data-Credits pro Minute<input type="number" name="creditsMinute" min="1" step="1"></label>
+        <label class="haken"><input type="checkbox" name="nurLong"> Nur Long (z. B. Planspiel Börse)</label>
+        <label>Persönlicher Versatz-Schlüssel<input name="salt" autocomplete="off"></label>
+        <button type="button" id="salt-neu" class="zweit">Neuen Schlüssel erzeugen</button>
+      </form>
+      <p class="leise">Alles wird nur in diesem Browser gespeichert. Der Versatz-Schlüssel sorgt dafür, dass deine Levels um einige Cent von denen anderer Nutzer abweichen.</p>
+    </details>
+  </main>
+
+  <footer class="fuss">
+    <p>Keine Anlageberatung. Die Levels sind Rechenergebnisse aus Kursdaten und können falsch sein. Kurse: Twelve Data · Stimmung: CNN Fear &amp; Greed bzw. Ersatzwert aus SPY, alternative.me, Alpha Vantage.</p>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

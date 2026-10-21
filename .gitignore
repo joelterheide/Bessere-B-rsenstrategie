@@ -1,0 +1,4 @@
+node_modules/
+sentiment.json
+_site/
+__pycache__/
