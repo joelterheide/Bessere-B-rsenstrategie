@@ -18,7 +18,7 @@ Symbol eingeben (`ISRG`, `SAP.DE`, `SAP:XETR`, `BTC/USD`; die Yahoo-Endungen aus
 
 Gibt der Markt kein sauberes Setup her, sagt die Seite das direkt: kein Trend, überkauft, Event-Tag (z. B. Quartalszahlen), CRV zu klein. Wenn möglich nennt sie eine Marke zum Beobachten.
 
-Außerdem: Chart mit den eigenen Levels und den Zonen der Masse, Watchlist-Scan (hält das Credit-Limit ein), automatische Aktualisierung jede Minute, „Prompt für Claude kopieren“ (Vorgaben + Daten + Engine-Vorschlag zum Gegenprüfen) und eine Demo mit echten Kursen ohne API-Key.
+Außerdem: Chart mit den eigenen Levels und den Zonen der Masse, umschaltbar zwischen Tageskerzen und den 5-Minuten-Kerzen des letzten Handelstags (Uhrzeit in Berliner Zeit, mit Vortagesschluss; dort sieht man Stop-Hunts an runden Zahlen direkt), Watchlist-Scan (hält das Credit-Limit ein), automatische Aktualisierung jede Minute, „Prompt für Claude kopieren“ (Vorgaben + Daten + Engine-Vorschlag zum Gegenprüfen) und eine Demo mit echten Kursen ohne API-Key.
 
 ## Einrichtung
 
@@ -32,12 +32,13 @@ Lokal starten: `python3 -m http.server 8000`, dann http://localhost:8000 öffnen
 
 | Quelle | Wofür | Kosten |
 |---|---|---|
-| Twelve Data (REST, wie der Bot; auch als MCP in Claude) | Kurse, Wechselkurse, SPY-Ersatzwert | Basic gratis: 8 Credits/Minute, 800/Tag, nur US-Werte in Echtzeit |
+| Twelve Data (REST, wie der Bot; auch als MCP in Claude) | Kurse (Tages- und 5-Minuten-Kerzen), Wechselkurse, SPY-Ersatzwert | Basic gratis: 8 Credits/Minute, 800/Tag, nur US-Werte in Echtzeit |
 | CNN Fear & Greed | Marktstimmung Aktien | gratis, über die GitHub Action (`tools/sentiment.py`) |
 | alternative.me | Marktstimmung Krypto | gratis |
 | Alpha Vantage | News-Stimmung je Aktie | gratis 25/Tag |
 
 **Empfehlung für minütliche Daten: Twelve Data „Grow“** (ab 29 $/Monat). Gleicher Key, gleiche API und gleicher MCP wie bisher, also keine Umbauten. Grow hat kein Tageslimit, je nach Stufe 55–377 Credits pro Minute und Echtzeit für US-Aktien. Außerdem schaltet Grow die Xetra-Werte frei (im Gratis-Plan liefert z. B. `SAP:XETR` nur „available starting with the Grow plan“). Damit kann die Seite die ganze Watchlist jede Minute aktualisieren. Wer europäische Kurse in Echtzeit und WebSocket-Streaming braucht: **Pro** (ab 99 $/Monat); vorher beim Support klären, ob Xetra in Echtzeit enthalten ist.
+Verbrauch der Seite: 1 Credit pro Analyse, +1, wenn die 5-Minuten-Ansicht offen ist (sie lädt erst beim Öffnen), dazu stündlich der Wechselkurs und halbstündlich der SPY-Ersatzwert. Bei Aktualisierung jede Minute sind das 1–2 Credits pro Minute.
 Wichtig im Gratis-Plan: Bot und Website teilen sich die 8 Credits pro Minute. Läuft der Bot gerade, meldet die Seite „Limit erreicht“.
 
 Nur US-Werte, kostenlos in Echtzeit: Alpaca Market Data (IEX-Feed gratis, alle US-Börsen 99 $/Monat). Das ist nicht eingebaut; die Datenschicht (`js/daten.js`) ist aber so geschnitten, dass sich eine zweite Quelle ergänzen lässt.

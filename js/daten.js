@@ -68,6 +68,47 @@ export async function tageskerzen(sym, key, anzahl = 300) {
   return { kerzen, waehrung, boerse: d.meta?.exchange || '', zeitzone: d.meta?.exchange_timezone };
 }
 
+// ---------- 5-Minuten-Kerzen ----------
+
+// Minuten, um die die Uhr in `zeitzone` zum Zeitpunkt utcMs der UTC-Zeit voraus ist
+function versatzMinuten(utcMs, zeitzone) {
+  const teile = new Intl.DateTimeFormat('en-US', {
+    timeZone: zeitzone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).formatToParts(new Date(utcMs));
+  const w = Object.fromEntries(teile.map((t) => [t.type, t.value]));
+  return (Date.UTC(+w.year, w.month - 1, +w.day, +w.hour, +w.minute) - utcMs) / 60e3;
+}
+
+// Börsen-Ortszeit ("2026-10-21 09:30:00" in New York) → Berliner Uhrzeit ("15:30").
+// Zwischen dem EU- und dem US-Wechsel der Sommerzeit liegen nur 5 statt 6 Stunden dazwischen.
+export function inBerlin(datetime, zeitzone) {
+  const [datum, uhr = '00:00'] = datetime.split(' ');
+  const [j, m, t] = datum.split('-').map(Number);
+  const [h, min] = uhr.split(':').map(Number);
+  const wand = Date.UTC(j, m - 1, t, h, min);
+  let utc = wand - versatzMinuten(wand, zeitzone) * 60e3;
+  utc = wand - versatzMinuten(utc, zeitzone) * 60e3;
+  return new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' }).format(new Date(utc));
+}
+
+// Twelve-Data-Werte (beliebige Reihenfolge) → Kerzen des letzten Handelstags, älteste zuerst.
+// Krypto handelt rund um die Uhr: dort einfach die letzten Kerzen ohne Tagesgrenze.
+export function intradayAus(werte, zeitzone, nurLetzterTag = true) {
+  const sortiert = [...werte].sort((a, b) => (a.datetime < b.datetime ? -1 : 1));
+  const tag = sortiert.at(-1)?.datetime.slice(0, 10);
+  return sortiert.filter((w) => !nurLetzterTag || w.datetime.startsWith(tag)).map((w) => ({
+    datum: w.datetime.slice(0, 10), zeit: inBerlin(w.datetime, zeitzone),
+    eroeffnung: +w.open, hoch: +w.high, tief: +w.low, schluss: +w.close, volumen: +(w.volume || 0),
+  }));
+}
+
+export async function intradaykerzen(sym, key) {
+  const d = await twelve('time_series', {
+    symbol: sym.symbol, interval: '5min', outputsize: 120, ...(sym.mic && { mic_code: sym.mic }),
+  }, key);
+  return intradayAus(d.values, d.meta?.exchange_timezone || 'UTC', sym.art !== 'krypto');
+}
+
 // Umrechnung: Kapitalwährung je Einheit der Kurswährung (z. B. USD → EUR)
 export async function wechselkurs(von, nach, key) {
   if (!von || von === nach) return 1;

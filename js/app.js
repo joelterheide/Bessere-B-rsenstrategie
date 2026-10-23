@@ -2,7 +2,9 @@ import { analysiere, datumDe, STANDARD_EINSTELLUNGEN } from './engine.js';
 import { alsText, zahl } from './format.js';
 import { zeichneChart } from './chart.js';
 import { claudePrompt } from './prompt.js';
-import { DatenFehler, marktSentiment, newsSentiment, symbolLesen, tageskerzen, wechselkurs } from './daten.js';
+import {
+  DatenFehler, intradayAus, intradaykerzen, marktSentiment, newsSentiment, symbolLesen, tageskerzen, wechselkurs,
+} from './daten.js';
 
 const $ = (id) => document.getElementById(id);
 const SPEICHER = 'einstellungen';
@@ -18,7 +20,7 @@ function neuerSalt() {
 function ladeEinstellungen() {
   let gespeichert = {};
   try { gespeichert = JSON.parse(localStorage.getItem(SPEICHER)) || {}; } catch { /* leer */ }
-  const e = { ...STANDARD_EINSTELLUNGEN, tdKey: '', avKey: '', creditsMinute: 8, watchlist: '', ...gespeichert };
+  const e = { ...STANDARD_EINSTELLUNGEN, tdKey: '', avKey: '', creditsMinute: 8, watchlist: '', ansicht: 'tag', ...gespeichert };
   if (!e.salt || e.salt === 'standard') e.salt = neuerSalt();
   return e;
 }
@@ -57,7 +59,7 @@ $('wl').addEventListener('change', () => { einst.watchlist = $('wl').value; spei
 
 // ---------- Analyse ----------
 
-let letzte = null; // { sym, kerzen, waehrung, markt, news, fx, heute, demo }
+let letzte = null; // { sym, kerzen, waehrung, markt, news, fx, heute, demo, intraday }
 let timer = null;
 
 function meldung(text, fehler = false) {
@@ -126,10 +128,12 @@ async function demo(name) {
   if (!fall) return;
   const d = await (await fetch(fall.datei)).json();
   const kerzen = fall.bis ? d.kerzen.filter((k) => k.datum <= fall.bis) : d.kerzen;
+  const tag = kerzen.at(-1).datum;
   clearTimeout(timer);
   letzte = {
     sym: { symbol: d.symbol, anzeige: d.symbol, art: 'aktie' }, kerzen, waehrung: d.waehrung,
-    markt: null, news: null, fx: einst.kapitalWaehrung === 'EUR' ? 1 / 1.16 : 1, heute: kerzen.at(-1).datum, demo: d.quelle,
+    markt: null, news: null, fx: einst.kapitalWaehrung === 'EUR' ? 1 / 1.16 : 1, heute: tag, demo: d.quelle,
+    intraday: d.intraday?.[tag] ? intradayAus(d.intraday[tag], d.zeitzone) : [],
   };
   $('symbol').value = d.symbol;
   zeigen(letzte);
@@ -204,17 +208,72 @@ function zeigen(d) {
     if (r.beobachten) kacheln.append(kachel('Beobachten', zahl(r.beobachten), 'nächste solide Marke'));
   }
 
-  chartDaten = [r, d.kerzen];
-  zeichneChart($('chart'), $('tooltip'), r, d.kerzen);
-  kurstabelle(d.kerzen);
+  chartDaten = { d, r };
+  chartZeichnen();
   abschnitte(alsText(r, einst));
   $('kopieren').onclick = () => kopieren(alsText(r, einst), 'Analyse kopiert.');
   $('prompt').onclick = async () => kopieren(await claudePrompt(r, d.kerzen), 'Prompt kopiert – in Claude einfügen.');
 }
 
+// ---------- Chart: Tageskerzen oder 5-Minuten-Kerzen des letzten Handelstags ----------
+
+let chartDaten = null; // { d, r } der aktuellen Anzeige
+
+function leer(text) {
+  const p = document.createElement('p');
+  p.className = 'chartleer';
+  p.textContent = text;
+  $('chart').replaceChildren(p);
+}
+
+async function chartZeichnen() {
+  if (!chartDaten) return;
+  const { d, r } = chartDaten;
+  const heute = einst.ansicht === 'heute';
+  for (const b of document.querySelectorAll('.umschalter button')) b.setAttribute('aria-pressed', String(b.dataset.ansicht === einst.ansicht));
+  $('key-vortag').hidden = !heute;
+  $('tooltip').hidden = true;
+  if (!heute) {
+    zeichneChart($('chart'), $('tooltip'), r, d.kerzen);
+    $('chartnotiz').textContent = '';
+    kurstabelle(d.kerzen, false);
+    return;
+  }
+  // 5-Minuten-Kerzen erst laden, wenn jemand die Ansicht öffnet (1 Credit)
+  if (d.intraday === undefined) {
+    leer('Lade 5-Minuten-Kerzen …');
+    d.intradayLaden ??= intradaykerzen(d.sym, einst.tdKey).catch((e) => e.message);
+    d.intraday = await d.intradayLaden;
+    // inzwischen kann ein anderer Wert oder die Tagesansicht gewählt sein: mit dem aktuellen Stand neu zeichnen
+    if (chartDaten?.d === d && einst.ansicht === 'heute') chartZeichnen();
+    return;
+  }
+  if (typeof d.intraday === 'string' || !d.intraday.length) {
+    leer(typeof d.intraday === 'string' ? `Keine 5-Minuten-Kerzen: ${d.intraday}` : 'Für diesen Tag liegen keine 5-Minuten-Kerzen vor.');
+    $('chartnotiz').textContent = '';
+    kurstabelle([], true);
+    return;
+  }
+  const tag = d.intraday.at(-1).datum;
+  const vortag = d.kerzen.filter((k) => k.datum < tag).at(-1)?.schluss ?? null;
+  zeichneChart($('chart'), $('tooltip'), r, d.intraday, { intraday: true, vortag });
+  $('chartnotiz').textContent = `${tag === d.heute ? 'Heute' : 'Letzter Handelstag'}, ${datumDe(tag)} · `
+    + `${d.intraday[0].zeit}–${d.intraday.at(-1).zeit} Uhr (Berliner Zeit) · Levels aus der Tagesanalyse`;
+  kurstabelle(d.intraday, true);
+}
+
+for (const b of document.querySelectorAll('.umschalter button')) {
+  b.addEventListener('click', () => {
+    einst.ansicht = b.dataset.ansicht;
+    speichern();
+    chartZeichnen();
+  });
+}
+
 // Chart bei Größenänderung (Handy drehen, Fenster) neu zeichnen
-let chartDaten = null;
-new ResizeObserver(() => { if (chartDaten) zeichneChart($('chart'), $('tooltip'), ...chartDaten); }).observe($('chart'));
+new ResizeObserver(() => {
+  if (chartDaten && !(einst.ansicht === 'heute' && chartDaten.d.intraday === undefined)) chartZeichnen();
+}).observe($('chart'));
 
 function abschnitte(text) {
   const ziel = $('abschnitte');
@@ -238,18 +297,19 @@ function abschnitte(text) {
   }
 }
 
-function kurstabelle(kerzen) {
+function kurstabelle(kerzen, intraday) {
+  $('tabellentitel').textContent = intraday ? 'Kurstabelle (letzte 20 Fünf-Minuten-Kerzen)' : 'Kurstabelle (letzte 20 Tage)';
   const t = $('kurstabelle');
   t.replaceChildren();
   const kopf = t.insertRow();
-  for (const n of ['Datum', 'Eröffnung', 'Hoch', 'Tief', 'Schluss', 'Volumen']) {
+  for (const n of [intraday ? 'Uhrzeit' : 'Datum', 'Eröffnung', 'Hoch', 'Tief', 'Schluss', 'Volumen']) {
     const th = document.createElement('th');
     th.textContent = n;
     kopf.append(th);
   }
   for (const k of kerzen.slice(-20).reverse()) {
     const z = t.insertRow();
-    for (const w of [datumDe(k.datum), zahl(k.eroeffnung), zahl(k.hoch), zahl(k.tief), zahl(k.schluss), k.volumen.toLocaleString('de-DE')]) {
+    for (const w of [intraday ? k.zeit : datumDe(k.datum), zahl(k.eroeffnung), zahl(k.hoch), zahl(k.tief), zahl(k.schluss), k.volumen.toLocaleString('de-DE')]) {
       z.insertCell().textContent = w;
     }
   }

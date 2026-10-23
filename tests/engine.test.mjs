@@ -7,6 +7,7 @@ import { alsText } from '../js/format.js';
 import { atr, rsi, sma } from '../js/indikatoren.js';
 import { krumm, magnete, zufallsquelle } from '../js/schutz.js';
 import { marktProxy, newsAuswerten, stufe } from '../js/sentiment.js';
+import { inBerlin, intradayAus } from '../js/daten.js';
 import { aufwaertsRuecksetzer, hype, kerzenAus, spiegelSchluesse } from './szenarien.js';
 
 const isrg = JSON.parse(readFileSync(new URL('../demo/isrg.json', import.meta.url)));
@@ -187,4 +188,18 @@ test('Sentiment: Stufen, SPY-Ersatzwert, News', () => {
   }, 'ISRG', new Date(Date.UTC(2026, 9, 21, 14)));
   assert.equal(news.artikel24h, 1);
   assert.ok(Math.abs(news.score - 0.3) < 1e-9);
+});
+
+test('5-Minuten-Kerzen: Berliner Uhrzeit auch zwischen den Sommerzeit-Wechseln', () => {
+  assert.equal(inBerlin('2026-10-21 09:30:00', 'America/New_York'), '15:30');
+  assert.equal(inBerlin('2026-10-28 09:30:00', 'America/New_York'), '14:30'); // EU schon Winterzeit, USA noch nicht
+  assert.equal(inBerlin('2026-11-04 09:30:00', 'America/New_York'), '15:30');
+  assert.equal(inBerlin('2026-10-21 09:00:00', 'Europe/Berlin'), '09:00');
+  const tag = isrg.intraday['2026-10-21'];
+  const k = intradayAus([{ datetime: '2026-10-20 15:55:00', open: 1, high: 1, low: 1, close: 1 }, ...[...tag].reverse()], isrg.zeitzone);
+  assert.equal(k.length, 78);
+  assert.equal(k[0].zeit, '15:30');
+  assert.equal(k.at(-1).zeit, '21:55');
+  // Stop-Hunt am Zahlentag: erste Kerze sticht unter die runde 400 und schließt weit darüber
+  assert.ok(k[0].tief < 400 && k[0].schluss > 415);
 });

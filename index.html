@@ -54,21 +54,26 @@
 
       <figure class="karte chartkarte">
         <figcaption>
-          <span class="titel">Tageskerzen und Levels</span>
+          <span class="umschalter" role="group" aria-label="Zeitraum des Charts">
+            <button type="button" data-ansicht="tag" aria-pressed="true">Tageskerzen</button>
+            <button type="button" data-ansicht="heute" aria-pressed="false">Heute · 5 Min</button>
+          </span>
           <span class="legende" id="legende">
             <span><i class="key einstieg"></i>Einstieg</span>
             <span><i class="key ziel"></i>Kursziel</span>
             <span><i class="key stop"></i>Stop</span>
             <span><i class="key band"></i>Zonen der Masse</span>
             <span><i class="key rund"></i>runde Zahl</span>
+            <span id="key-vortag" hidden><i class="key vortag"></i>Vortagesschluss</span>
           </span>
         </figcaption>
         <div class="chartrahmen">
           <div id="chart"></div>
           <div id="tooltip" class="tooltip" hidden></div>
         </div>
+        <p id="chartnotiz" class="leise chartnotiz"></p>
         <details class="tabelle">
-          <summary>Kurstabelle (letzte 20 Tage)</summary>
+          <summary id="tabellentitel">Kurstabelle (letzte 20 Tage)</summary>
           <div class="scroll"><table id="kurstabelle"></table></div>
         </details>
       </figure>

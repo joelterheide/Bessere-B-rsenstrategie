@@ -26,7 +26,7 @@ Short-Trades laufen gespiegelt: Einstieg knapp unter dem Widerstand, Stop über 
 
 - **Limit nur 2 Handelstage gültig.** Wurde nicht ausgeführt, ist das Setup weg. Hinterherkaufen verschlechtert das CRV, genau das wollen Frontrunner.
 - **Stop erst nach 15 Minuten scharf.** Eröffnungs-Spikes (Xetra 9:00, USA 15:30) lösen die meisten Stops aus. Bis dahin genügt ein Kursalarm.
-- **Event-Tage aussetzen.** Bei einem Gap über 1,5 ATR (z. B. Quartalszahlen) sind alle Levels von gestern Makulatur, also erst den Tagesschluss abwarten. Beispiel: ISRG am 21.10.2026 eröffnete nach Zahlen bei 401,61 $ (−8 %), stach auf 399,65 $ unter die runde 400 und stand 40 Minuten nach Handelsbeginn wieder bei 418,87 $.
+- **Event-Tage aussetzen.** Bei einem Gap über 1,5 ATR (z. B. Quartalszahlen) sind alle Levels von gestern Makulatur, also erst den Tagesschluss abwarten. Beispiel: ISRG am 21.10.2026 eröffnete nach Zahlen bei 402,50 $ (−8 %), stach in den ersten fünf Minuten auf 398,99 $ unter die runde 400 und schloss bei 428,05 $. Wer den Stop knapp unter 400 hatte, war raus; im 5-Minuten-Chart der Demo ist das gut zu sehen.
 - **Abgefischtes Tief = Einstiegssignal.** Sticht der Kurs unter eine Marke und schließt wieder darüber, sind die schwachen Hände raus. Die Engine erkennt das als „Stop-Hunt-Umkehr“.
 - **Reclaim-Regel.** Ausgestoppt, und der Kurs schließt binnen 2 Tagen wieder über der Unterstützung? Dann einmal mit halber Größe neu einsteigen.
 

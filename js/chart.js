@@ -1,5 +1,6 @@
 // Kerzenchart (SVG) mit eigenen Levels und den Zonen, an denen die Masse handelt.
 // Kerzen bleiben grau, damit die Levels die Hauptrolle spielen.
+// Zwei Ansichten: Tageskerzen (letzte 60–90 Tage) und 5-Minuten-Kerzen des letzten Handelstags.
 
 import { magnete } from './schutz.js';
 import { zahl } from './format.js';
@@ -19,12 +20,12 @@ function text(eltern, x, y, inhalt, attrs = {}) {
   return t;
 }
 
-export function zeichneChart(container, tooltip, r, kerzen) {
+export function zeichneChart(container, tooltip, r, kerzen, { intraday = false, vortag = null } = {}) {
   container.replaceChildren();
   // in echter Pixelbreite zeichnen, damit die Schrift auf dem Handy nicht mitschrumpft
   const B = Math.max(300, Math.round(container.clientWidth || 760));
   const H = Math.round(Math.min(400, Math.max(280, B * 0.5)));
-  const sicht = kerzen.slice(B < 560 ? -60 : -90);
+  const sicht = intraday ? kerzen : kerzen.slice(B < 560 ? -60 : -90);
   const A = r.kennzahlen?.atr || 0;
   const e = r.ebenen;
   const linien = [];
@@ -34,6 +35,7 @@ export function zeichneChart(container, tooltip, r, kerzen) {
     linien.push({ preis: r.stop, art: 'stop', label: 'Stop' });
   }
   if (r.beobachten) linien.push({ preis: r.beobachten, art: 'beobachten', label: 'Beobachten' });
+  if (intraday && vortag) linien.push({ preis: vortag, art: 'vortag', label: 'Vortag' });
 
   const baender = [];
   if (e) {
@@ -45,8 +47,17 @@ export function zeichneChart(container, tooltip, r, kerzen) {
     baender.push({ von: s1, bis: s2, label: 'Stops der Masse (Jagdzone)' });
   }
 
-  const werte = [...sicht.flatMap((k) => [k.hoch, k.tief]), ...linien.map((l) => l.preis), ...baender.flatMap((b) => [b.von, b.bis])];
-  let min = Math.min(...werte), max = Math.max(...werte);
+  // Tagesansicht zeigt alle Levels. Intraday zählen nur Levels in der Nähe der Tagesspanne,
+  // sonst würden weit entfernte Ziele die Kerzen zusammenquetschen; die übrigen bekommen einen Pfeil am Rand.
+  let min = Math.min(...sicht.map((k) => k.tief)), max = Math.max(...sicht.map((k) => k.hoch));
+  const reichweite = intraday ? Math.max(0.5 * A, 0.5 * (max - min)) : Infinity;
+  const [lo, hi] = [min - reichweite, max + reichweite];
+  for (const p of [...linien.map((l) => l.preis), ...baender.flatMap((b) => [b.von, b.bis])]) {
+    if (p >= lo && p <= hi) {
+      min = Math.min(min, p);
+      max = Math.max(max, p);
+    }
+  }
   const rand = (max - min) * 0.06;
   min -= rand;
   max += rand;
@@ -56,13 +67,24 @@ export function zeichneChart(container, tooltip, r, kerzen) {
   const x = (i) => links + (i + 0.5) * (breite / sicht.length);
   const y = (p) => oben + (1 - (p - min) / (max - min)) * hoehe;
 
-  const svg = el('svg', { viewBox: `0 0 ${B} ${H}`, class: 'chart', role: 'img', 'aria-label': `Kurschart ${r.symbol} mit Levels` }, container);
+  const svg = el('svg', {
+    viewBox: `0 0 ${B} ${H}`, class: 'chart', role: 'img',
+    'aria-label': `${intraday ? '5-Minuten-Chart' : 'Tageschart'} ${r.symbol} mit Levels`,
+  }, container);
 
   // Beschriftungen der eigenen Levels rechts; überlappende rücken auseinander und bekommen Führungslinien
-  const marken = linien.map((l) => ({ ...l, y: y(l.preis) })).sort((a, b) => a.y - b.y);
+  const marken = linien.map((l) => {
+    const aussen = l.preis > max ? '↑' : l.preis < min ? '↓' : '';
+    return { ...l, aussen, y: aussen === '↑' ? oben : aussen === '↓' ? oben + hoehe : y(l.preis) };
+  }).sort((a, b) => a.y - b.y);
   let letztes = -Infinity;
   for (const m of marken) {
     m.ly = Math.max(m.y, letztes + 15);
+    letztes = m.ly;
+  }
+  letztes = Infinity;
+  for (const m of [...marken].reverse()) { // unten nicht aus dem Bild schieben
+    m.ly = Math.min(m.ly, letztes - 15, oben + hoehe + 6);
     letztes = m.ly;
   }
 
@@ -73,20 +95,33 @@ export function zeichneChart(container, tooltip, r, kerzen) {
     if (marken.some((m) => Math.abs(m.ly - y(p)) < 14)) continue;
     text(svg, B - 4, y(p) + 4, zahl(p, schritt < 1 ? 2 : 0), { class: 'achse', 'text-anchor': 'end' });
   }
-  // Monatsbeschriftung
-  let monat = '';
-  sicht.forEach((k, i) => {
-    const m = k.datum.slice(0, 7);
-    if (m !== monat) {
-      monat = m;
-      if (i > 2) text(svg, x(i), H - 8, new Date(k.datum + 'T12:00:00Z').toLocaleDateString('de-DE', { month: 'short' }), { class: 'achse', 'text-anchor': 'middle' });
-    }
-  });
+  if (intraday) {
+    // volle Stunden (Berliner Zeit), mit Mindestabstand fürs Handy
+    let zuletzt = -Infinity;
+    sicht.forEach((k, i) => {
+      if (k.zeit.endsWith(':00') && x(i) - zuletzt >= 44) {
+        text(svg, x(i), H - 8, k.zeit, { class: 'achse', 'text-anchor': 'middle' });
+        zuletzt = x(i);
+      }
+    });
+  } else {
+    let monat = '';
+    sicht.forEach((k, i) => {
+      const m = k.datum.slice(0, 7);
+      if (m !== monat) {
+        monat = m;
+        if (i > 2) text(svg, x(i), H - 8, new Date(k.datum + 'T12:00:00Z').toLocaleDateString('de-DE', { month: 'short' }), { class: 'achse', 'text-anchor': 'middle' });
+      }
+    });
+  }
 
   // Zonen der Masse (Beschriftung kommt zuletzt, damit keine Linie darüber läuft)
   baender.sort((a, b) => b.bis - a.bis);
   for (const b of baender) {
-    el('rect', { x: links, width: breite, y: y(b.bis), height: Math.max(2, y(b.von) - y(b.bis)), class: 'band' }, svg);
+    b.oben = Math.max(y(b.bis), oben);
+    b.unten = Math.min(y(b.von), oben + hoehe);
+    b.sichtbar = b.unten - b.oben >= 1;
+    if (b.sichtbar) el('rect', { x: links, width: breite, y: b.oben, height: Math.max(2, b.unten - b.oben), class: 'band' }, svg);
   }
   // runde Zahlen im Bild
   if (A) {
@@ -107,12 +142,16 @@ export function zeichneChart(container, tooltip, r, kerzen) {
   });
 
   for (const m of marken) {
-    el('line', { x1: links, x2: links + breite, y1: m.y, y2: m.y, class: `level ${m.art}` }, svg);
-    el('line', { x1: links + breite, x2: links + breite + 8, y1: m.y, y2: m.ly, class: 'fuehrung' }, svg);
-    text(svg, links + breite + 11, m.ly + 4, `${m.label} ${zahl(m.preis)}`, { class: 'levellabel' });
+    if (!m.aussen) {
+      el('line', { x1: links, x2: links + breite, y1: m.y, y2: m.y, class: `level ${m.art}` }, svg);
+      el('line', { x1: links + breite, x2: links + breite + 8, y1: m.y, y2: m.ly, class: 'fuehrung' }, svg);
+    }
+    text(svg, links + breite + 11, m.ly + 4, `${m.label} ${zahl(m.preis)}${m.aussen ? ` ${m.aussen}` : ''}`, { class: 'levellabel' });
   }
   // obere Zone darüber beschriften, untere darunter
-  baender.forEach((b, i) => text(svg, links + 4, i === 0 ? y(b.bis) - 5 : y(b.von) + 13, b.label, { class: 'bandlabel' }));
+  baender.forEach((b, i) => {
+    if (b.sichtbar) text(svg, links + 4, i === 0 ? Math.max(b.oben - 5, oben + 10) : Math.min(b.unten + 13, oben + hoehe - 4), b.label, { class: 'bandlabel' });
+  });
 
   // Fadenkreuz + Tooltip
   const kreuz = el('line', { y1: oben, y2: oben + hoehe, class: 'kreuz', visibility: 'hidden' }, svg);
@@ -125,7 +164,8 @@ export function zeichneChart(container, tooltip, r, kerzen) {
     tooltip.replaceChildren();
     const kopf = document.createElement('div');
     kopf.className = 'tt-kopf';
-    kopf.textContent = new Date(k.datum + 'T12:00:00Z').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+    const tag = new Date(k.datum + 'T12:00:00Z').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+    kopf.textContent = intraday ? `${k.zeit} Uhr · ${tag}` : tag;
     tooltip.appendChild(kopf);
     for (const [name, wert] of [['Schluss', k.schluss], ['Hoch', k.hoch], ['Tief', k.tief], ['Eröffnung', k.eroeffnung]]) {
       const z = document.createElement('div');

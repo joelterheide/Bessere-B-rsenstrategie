@@ -65,6 +65,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -207,6 +208,21 @@ figcaption .titel { font-weight: 600; }
 .key.stop { background: var(--stop); }
 .key.band { height: 10px; background: var(--band); border: 1px solid var(--rand); }
 .key.rund { height: 1px; background: var(--achse); }
+.key.vortag { height: 1px; background: var(--leise); }
+
+.umschalter { display: inline-flex; border: 1px solid var(--rand); border-radius: 8px; overflow: hidden; }
+.umschalter button {
+  background: transparent;
+  color: var(--tinte-2);
+  border-radius: 0;
+  padding: 5px 12px;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+.umschalter button + button { border-left: 1px solid var(--rand); }
+.umschalter button[aria-pressed="true"] { background: var(--band); color: var(--tinte); font-weight: 600; }
+.chartnotiz { margin: 6px 0 0; }
+.chartleer { padding: 48px 8px; text-align: center; color: var(--tinte-2); }
 
 .chartrahmen { position: relative; }
 .chart { width: 100%; height: auto; display: block; touch-action: pan-y; }
@@ -223,6 +239,7 @@ figcaption .titel { font-weight: 600; }
 .chart .level.ziel { stroke: var(--ziel); }
 .chart .level.stop { stroke: var(--stop); }
 .chart .level.beobachten { stroke: var(--tinte-2); stroke-width: 1; }
+.chart .level.vortag { stroke: var(--leise); stroke-width: 1; }
 .chart .fuehrung { stroke: var(--achse); stroke-width: 1; }
 .chart .levellabel { fill: var(--tinte); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .chart .kreuz { stroke: var(--leise); stroke-width: 1; }
